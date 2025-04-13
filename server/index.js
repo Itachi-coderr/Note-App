@@ -19,7 +19,7 @@ const io = setupSocket(server);
 const allowedOrigins = [
   process.env.CORS_ORIGIN,
   'http://localhost:5173',
-  'https://note-app-kdmc-6kjpa27eo-muhammad-umars-projects-1e4bc850.vercel.app'
+  'https://note-app-kdmc.vercel.app/'
 ];
 
 // Middleware

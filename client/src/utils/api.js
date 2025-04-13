@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Get the API URL from environment variables, fallback to production URL if not set
-const API_URL = import.meta.env.VITE_API_URL || 'https://note-app-six-mocha.vercel.app';
+const API_URL = import.meta.env.VITE_API_URL || 'https://note-app-six-mocha.vercel.app/';
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
