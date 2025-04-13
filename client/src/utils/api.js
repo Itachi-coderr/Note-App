@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// Get the API URL from environment variables, fallback to production URL if not set
+const API_URL = import.meta.env.VITE_API_URL || 'https://note-app-six-mocha.vercel.app';
+
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL}/api`,
+  baseURL: `${API_URL}/api`,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
@@ -18,6 +21,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('Request error:', error);
     return Promise.reject(error);
   }
 );
@@ -26,6 +30,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.error('Response error:', error);
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/signin';

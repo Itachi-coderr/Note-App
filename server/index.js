@@ -15,14 +15,33 @@ const server = http.createServer(app);
 // Initialize socket.io
 const io = setupSocket(server);
 
+// CORS configuration
+const allowedOrigins = [
+  process.env.CORS_ORIGIN,
+  'http://localhost:5173',
+  'https://note-app-kdmc-6kjpa27eo-muhammad-umars-projects-1e4bc850.vercel.app'
+];
+
 // Middleware
 app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
   res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
   next();
 });
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
@@ -61,6 +80,12 @@ mongoose.connect(process.env.MONGODB_URI)
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      message: 'CORS error: Origin not allowed',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
   res.status(500).json({ 
     message: 'Something went wrong!',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
