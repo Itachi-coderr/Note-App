@@ -19,9 +19,10 @@ import {
 } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import WhatsAppIcon from '../components/WhatsAppIcon';
-import axios from 'axios';
+import api from '../utils/api';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import { debounce } from 'lodash';
 
 const Editor = () => {
   const { id } = useParams();
@@ -67,8 +68,8 @@ const Editor = () => {
 
     // Listen for other users joining
     socket.on('user-joined', (userData) => {
+      console.log('User joined:', userData);
       setActiveUsers(prev => {
-        // Check if user already exists
         if (prev.some(u => u.userId === userData.userId)) {
           return prev;
         }
@@ -76,11 +77,35 @@ const Editor = () => {
       });
     });
 
+    // Listen for users leaving
+    socket.on('user-left', (userData) => {
+      console.log('User left:', userData);
+      setActiveUsers(prev => prev.filter(u => u.userId !== userData.userId));
+    });
+
     // Listen for document changes
     socket.on('document-changed', ({ changes, version, userId }) => {
-      if (version > lastContentVersion.current && userId !== user._id) {
+      console.log('Document changed:', { changes, version, userId });
+      if (userId !== user._id) {
         setContent(changes.content);
-        lastContentVersion.current = version;
+        if (version) {
+          lastContentVersion.current = version;
+        }
+      }
+    });
+
+    // Request initial document state
+    socket.emit('get-document', { documentId: id });
+
+    // Listen for initial document state
+    socket.on('load-document', (documentData) => {
+      console.log('Loading document:', documentData);
+      if (documentData) {
+        setContent(documentData.content || '');
+        setTitle(documentData.title || 'Untitled Document');
+        if (documentData.version) {
+          lastContentVersion.current = documentData.version;
+        }
       }
     });
 
@@ -109,9 +134,9 @@ const Editor = () => {
           username: user.name || user.email
         });
         socket.off('user-joined');
-        socket.off('document-users');
         socket.off('user-left');
         socket.off('document-changed');
+        socket.off('load-document');
         socket.off('cursor-moved');
         socket.off('document-locked');
         socket.off('document-unlocked');
@@ -121,22 +146,35 @@ const Editor = () => {
 
   const fetchNote = async () => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/notes/${id}`, {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      if (!id) {
+        setTitle('Untitled Document');
+        setContent('');
+        return;
+      }
+
+      const response = await api.get(`/notes/${id}`);
       if (response.data) {
         setTitle(response.data.title || 'Untitled Document');
         setContent(response.data.content || '');
         lastContentVersion.current = response.data.version || 0;
+
+        // Get shared users
+        const sharedResponse = await api.get(`/notes/${id}/shared`);
+        if (sharedResponse.data) {
+          const sharedUsers = sharedResponse.data.map(user => ({
+            userId: user._id,
+            username: user.name || user.email
+          }));
+          setActiveUsers(prev => {
+            const currentUser = prev.find(u => u.userId === user._id);
+            return [...sharedUsers, ...(currentUser ? [currentUser] : [])];
+          });
+        }
       }
     } catch (error) {
       console.error('Error fetching note:', error);
-      if (error.response?.status === 404) {
-        // Create new note silently without showing error
-        handleSave();
+      if (error.response?.status === 404 && id) {
+        await handleSave();
       }
     }
   };
@@ -159,7 +197,25 @@ const Editor = () => {
       }
     },
     clipboard: {
-      matchVisual: false
+      matchVisual: false,
+      preserveWhitespace: true
+    },
+    keyboard: {
+      bindings: {
+        tab: false,
+        'space': {
+          key: 32,
+          handler: function(range) {
+            this.quill.insertText(range.index, ' ');
+            return false;
+          }
+        }
+      }
+    },
+    history: {
+      delay: 1000,
+      maxStack: 500,
+      userOnly: true
     }
   }), []);
 
@@ -171,19 +227,144 @@ const Editor = () => {
     'link', 'image'
   ];
 
-  // Handle content changes
-  const handleChange = (value) => {
-    setContent(value);
-    if (socket && id) {
-      lastContentVersion.current += 1;
-      socket.emit('document-change', {
-        documentId: id,
-        changes: { content: value },
-        version: lastContentVersion.current,
-        userId: user._id
-      });
+  // Define handleSave first
+  const handleSave = async () => {
+    if (!content || isSaving) return;
+
+    try {
+      setIsSaving(true);
+      const noteData = {
+        title,
+        content,
+        version: lastContentVersion.current
+      };
+
+      let response;
+      if (id) {
+        response = await api.put(`/notes/${id}`, noteData);
+      } else {
+        response = await api.post('/notes', noteData);
+        // Update URL with new note ID
+        navigate(`/editor/${response.data._id}`, { replace: true });
+      }
+
+      if (response.data.version) {
+        lastContentVersion.current = response.data.version;
+      }
+
+      // Show success message
+      const message = document.createElement('div');
+      message.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+      message.textContent = 'Document saved successfully';
+      document.body.appendChild(message);
+      setTimeout(() => message.remove(), 3000);
+
+      setIsSaving(false);
+    } catch (error) {
+      console.error('Error saving note:', error);
+      const message = document.createElement('div');
+      message.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+      message.textContent = error.response?.data?.message || 'Failed to save document. Please try again.';
+      document.body.appendChild(message);
+      setTimeout(() => message.remove(), 3000);
+      setIsSaving(false);
     }
   };
+
+  // Define debouncedSave before it's used
+  const debouncedSave = useMemo(() => 
+    debounce(() => {
+      handleSave();
+    }, 2000)
+  , []);
+
+  // Optimize the change handler with better cursor preservation
+  const handleChange = (value, delta, source, editor) => {
+    if (source !== 'user') return; // Only handle user changes
+    
+    setContent(value);
+    
+    // Store current cursor position
+    const selection = editor.getSelection();
+    
+    // Increment version
+    const version = lastContentVersion.current + 1;
+    lastContentVersion.current = version;
+
+    // Emit changes with debounce
+    emitChanges(value, version, selection);
+
+    // Trigger autosave with existing debounce
+    debouncedSave();
+  };
+
+  // Optimize emitChanges for cursor preservation
+  const emitChanges = useMemo(
+    () =>
+      debounce((value, version, selection) => {
+        if (socket && id) {
+          socket.emit('document-change', {
+            documentId: id,
+            changes: {
+              content: value,
+              title,
+              selection
+            },
+            version,
+            userId: user._id
+          });
+        }
+      }, 300), // Increased debounce time for better stability
+    [socket, id, title, user._id]
+  );
+
+  // Update document changes listener with cursor preservation
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDocumentChange = ({ changes, version, userId }) => {
+      if (userId !== user._id) {
+        const editor = quillRef.current?.getEditor();
+        if (editor) {
+          // Store current cursor position
+          const currentSelection = editor.getSelection();
+          
+          // Disable editor events temporarily
+          editor.disable();
+          
+          // Update content
+          editor.setContents(editor.clipboard.convert(changes.content), 'silent');
+          
+          // Re-enable editor
+          editor.enable();
+          
+          // Restore cursor position
+          if (currentSelection) {
+            editor.setSelection(currentSelection);
+          }
+          
+          // Update version
+          if (version) {
+            lastContentVersion.current = version;
+          }
+        }
+      }
+    };
+
+    socket.on('document-changed', handleDocumentChange);
+
+    return () => {
+      socket.off('document-changed', handleDocumentChange);
+    };
+  }, [socket, user._id]);
+
+  // Cleanup debounced functions
+  useEffect(() => {
+    return () => {
+      emitChanges.cancel();
+      debouncedSave.cancel();
+    };
+  }, [emitChanges, debouncedSave]);
 
   // Handle cursor movement
   const handleCursorMove = (range) => {
@@ -253,42 +434,6 @@ const Editor = () => {
     return colors[index % colors.length];
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      const noteData = {
-        title: title,
-        content,
-        version: lastContentVersion.current
-      };
-
-      if (id) {
-        // Update existing note
-        await axios.put(`http://localhost:5000/api/notes/${id}`, noteData, {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-      } else {
-        // Create new note
-        const response = await axios.post('http://localhost:5000/api/notes', noteData, {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        // Navigate to the new note's URL
-        navigate(`/editor/${response.data._id}`);
-      }
-      setIsSaving(false);
-    } catch (error) {
-      console.error('Error saving note:', error);
-      alert('Failed to save note. Please try again.');
-      setIsSaving(false);
-    }
-  };
-
   const handleDownload = () => {
     const blob = new Blob([content], { type: 'text/html' });
     const url = window.URL.createObjectURL(blob);
@@ -329,8 +474,35 @@ const Editor = () => {
     try {
       const editor = quillRef.current.getEditor();
       const range = editor.getSelection(true);
-      editor.insertEmbed(range ? range.index : 0, 'image', url);
-      editor.setSelection((range ? range.index : 0) + 1);
+      const index = range ? range.index : 0;
+      
+      // Insert image
+      editor.insertEmbed(index, 'image', url);
+      editor.setSelection(index + 1);
+
+      // Get the updated content after image insertion
+      const updatedContent = editor.root.innerHTML;
+      setContent(updatedContent);
+
+      // Emit changes to other users
+      const version = lastContentVersion.current + 1;
+      lastContentVersion.current = version;
+      
+      if (socket && id) {
+        socket.emit('document-change', {
+          documentId: id,
+          changes: {
+            content: updatedContent,
+            title
+          },
+          version,
+          userId: user._id
+        });
+      }
+
+      // Save the document with the new image
+      debouncedSave();
+      
       setShowImageUpload(false);
     } catch (error) {
       console.error('Error inserting image:', error);

@@ -19,15 +19,23 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      // Create socket connection using environment variable
-      const socketInstance = io(import.meta.env.VITE_API_URL, {
+      // Create socket connection with optimized settings
+      const socketInstance = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
         auth: {
           userId: user._id,
           username: user.name || user.email
         },
         withCredentials: true,
         autoConnect: true,
-        transports: ['websocket', 'polling']
+        transports: ['websocket'],
+        forceNew: false,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+        pingInterval: 25000,
+        pingTimeout: 20000
       });
 
       // Set up event listeners
@@ -41,8 +49,10 @@ export const SocketProvider = ({ children }) => {
         console.log('Socket disconnected');
       });
 
-      socketInstance.on('error', (error) => {
-        console.error('Socket error:', error);
+      socketInstance.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        // Attempt to reconnect with websocket only
+        socketInstance.io.opts.transports = ['websocket'];
       });
 
       // Set socket instance
