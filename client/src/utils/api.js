@@ -1,7 +1,10 @@
 import axios from 'axios';
 
-// Get the API URL from environment variables, fallback to production URL if not set
-const API_URL = import.meta.env.VITE_API_URL || 'https://note-app-six-mocha.vercel.app/';
+const API_URL = import.meta.env.VITE_API_URL;
+
+if (!API_URL) {
+  console.error('VITE_API_URL is not set in environment variables');
+}
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
@@ -18,6 +21,8 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Log the request URL for debugging
+    console.log('Making request to:', config.baseURL + config.url);
     return config;
   },
   (error) => {
