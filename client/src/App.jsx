@@ -7,6 +7,7 @@ import DocumentSelection from './pages/DocumentSelection';
 import Editor from './pages/Editor';
 import Navbar from './components/Navbar';
 import PrivateRoute from './components/PrivateRoute';
+import './index.css';
 
 function App() {
   return (

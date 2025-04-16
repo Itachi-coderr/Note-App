@@ -1,1 +1,19 @@
 @import "tailwindcss";
+
+[data-user] {
+    background-color: rgba(255, 230, 150, 0.5); /* Highlight color */
+    position: relative;
+  }
+  
+  [data-user]::after {
+    content: attr(data-user); /* Display the username */
+    position: absolute;
+    top: -20px;
+    left: 0;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }

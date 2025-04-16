@@ -24,7 +24,7 @@ const setupSocket = (server) => {
     }
 
     // Join document room
-    socket.on('join-document', async ({ documentId }) => {
+    socket.on('join-document', async ({ documentId, userId, username }) => {
       socket.join(documentId);
       
       if (!documentUsers.has(documentId)) {
@@ -32,16 +32,16 @@ const setupSocket = (server) => {
       }
       documentUsers.get(documentId).add(userId);
 
-      // Notify others in the room about new user
+      // Notify others in the room about the new user
       socket.to(documentId).emit('user-joined', {
         userId,
-        username
+        username,
       });
 
-      // Send current users in document to the new user
-      const users = Array.from(documentUsers.get(documentId)).map(id => ({
+      // Send the list of active users in the document to the new user
+      const users = Array.from(documentUsers.get(documentId)).map((id) => ({
         userId: id,
-        username: getUsernameByUserId(id)
+        username: getUsernameByUserId(id),
       }));
       io.to(socket.id).emit('document-users', users);
     });
@@ -49,29 +49,27 @@ const setupSocket = (server) => {
     // Handle document changes
     socket.on('document-change', async ({ documentId, changes, version }) => {
       try {
-        // Save changes to database
+        // Save changes to the database
         await Note.findByIdAndUpdate(documentId, {
           content: changes.content,
           $push: {
             versions: {
               content: changes.content,
-              modifiedBy: userId
-            }
-          }
+              modifiedBy: userId,
+            },
+          },
         });
 
         // Broadcast changes to other users in the document
         socket.to(documentId).emit('document-changed', {
           changes,
           userId,
-          username,
-          version
+          username, // Include the username of the editor
+          version,
         });
       } catch (error) {
         console.error('Error saving document changes:', error);
-        socket.emit('document-error', {
-          message: 'Failed to save changes'
-        });
+        socket.emit('document-error', { message: 'Failed to save changes' });
       }
     });
 
@@ -131,6 +129,25 @@ const setupSocket = (server) => {
       }
       console.log(`User disconnected: ${username} (${userId})`);
     });
+
+    socket.on('get-document', async ({ documentId }) => {
+      try {
+        const document = await Note.findById(documentId);
+        if (!document) {
+          return socket.emit('document-error', { message: 'Document not found' });
+        }
+    
+        // Send the document to the client
+        socket.emit('load-document', {
+          title: document.title,
+          content: document.content,
+          version: document.versions.length || 0,
+        });
+      } catch (error) {
+        console.error('Error fetching document:', error);
+        socket.emit('document-error', { message: 'Failed to load document' });
+      }
+    });
   });
 
   // Helper function to get username by userId
@@ -146,4 +163,4 @@ const setupSocket = (server) => {
   return io;
 };
 
-module.exports = setupSocket; 
+module.exports = setupSocket;

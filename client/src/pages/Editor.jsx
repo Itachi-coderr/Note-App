@@ -20,6 +20,7 @@ import {
 import ImageUpload from '../components/ImageUpload';
 import WhatsAppIcon from '../components/WhatsAppIcon';
 import api from '../utils/api';
+import { getRandomColor } from '../utils/colorUtils';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { debounce } from 'lodash';
@@ -53,24 +54,25 @@ const Editor = () => {
   useEffect(() => {
     if (!socket || !id || !user) return;
 
-    // Join document with user info
-    socket.emit('join-document', { 
+    // Join the document room
+    socket.emit('join-document', {
       documentId: id,
       userId: user._id,
-      username: user.name || user.email
+      username: user.name || user.email,
     });
 
-    // Set initial active users including current user
-    setActiveUsers([{
-      userId: user._id,
-      username: user.name || user.email
-    }]);
+    // Set the current user as active
+    setActiveUsers([
+      {
+        userId: user._id,
+        username: user.name || user.email,
+      },
+    ]);
 
     // Listen for other users joining
     socket.on('user-joined', (userData) => {
-      console.log('User joined:', userData);
-      setActiveUsers(prev => {
-        if (prev.some(u => u.userId === userData.userId)) {
+      setActiveUsers((prev) => {
+        if (prev.some((u) => u.userId === userData.userId)) {
           return prev;
         }
         return [...prev, userData];
@@ -79,8 +81,7 @@ const Editor = () => {
 
     // Listen for users leaving
     socket.on('user-left', (userData) => {
-      console.log('User left:', userData);
-      setActiveUsers(prev => prev.filter(u => u.userId !== userData.userId));
+      setActiveUsers((prev) => prev.filter((u) => u.userId !== userData.userId));
     });
 
     // Listen for document changes
@@ -141,6 +142,53 @@ const Editor = () => {
         socket.off('document-locked');
         socket.off('document-unlocked');
       }
+    };
+  }, [socket, id, user]);
+
+  useEffect(() => {
+    if (!socket || !id || !user) return;
+
+    // Join the document room
+    socket.emit('join-document', {
+      documentId: id,
+      userId: user._id,
+      username: user.name || user.email,
+    });
+
+    // Set the current user as active
+    setActiveUsers([
+      {
+        userId: user._id,
+        username: user.name || user.email,
+      },
+    ]);
+
+    // Listen for other users joining
+    socket.on('user-joined', (userData) => {
+      setActiveUsers((prev) => {
+        if (prev.some((u) => u.userId === userData.userId)) {
+          return prev;
+        }
+        return [...prev, userData];
+      });
+    });
+
+    // Listen for the list of active users
+    socket.on('document-users', (users) => {
+      setActiveUsers(users);
+    });
+
+    // Listen for users leaving
+    socket.on('user-left', (userData) => {
+      setActiveUsers((prev) => prev.filter((u) => u.userId !== userData.userId));
+    });
+
+    // Cleanup on unmount
+    return () => {
+      socket.emit('leave-document', { documentId: id });
+      socket.off('user-joined');
+      socket.off('document-users');
+      socket.off('user-left');
     };
   }, [socket, id, user]);
 
@@ -322,7 +370,7 @@ const Editor = () => {
   useEffect(() => {
     if (!socket) return;
 
-    const handleDocumentChange = ({ changes, version, userId }) => {
+    const handleDocumentChange = ({ changes, version, userId, username }) => {
       if (userId !== user._id) {
         const editor = quillRef.current?.getEditor();
         if (editor) {
@@ -335,6 +383,14 @@ const Editor = () => {
           // Update content
           editor.setContents(editor.clipboard.convert(changes.content), 'silent');
           
+          // Highlight the edited lines
+          const delta = editor.clipboard.convert(changes.content);
+          delta.ops.forEach((op, index) => {
+            if (op.insert && op.attributes) {
+              op.attributes['data-user'] = username;
+            }
+          });
+
           // Re-enable editor
           editor.enable();
           
@@ -343,6 +399,56 @@ const Editor = () => {
             editor.setSelection(currentSelection);
           }
           
+          // Update version
+          if (version) {
+            lastContentVersion.current = version;
+          }
+        }
+      }
+    };
+
+    socket.on('document-changed', handleDocumentChange);
+
+    return () => {
+      socket.off('document-changed', handleDocumentChange);
+    };
+  }, [socket, user._id]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDocumentChange = ({ changes, version, userId, username }) => {
+      if (userId !== user._id) {
+        const editor = quillRef.current?.getEditor();
+        if (editor) {
+          // Store current cursor position
+          const currentSelection = editor.getSelection();
+
+          // Disable editor events temporarily
+          editor.disable();
+
+          // Update content
+          const delta = editor.clipboard.convert(changes.content);
+
+          // Apply the `data-user` attribute to each operation
+          delta.ops.forEach((op) => {
+            if (op.insert && typeof op.insert === 'string') {
+              if (!op.attributes) op.attributes = {};
+              op.attributes['data-user'] = username; // Add the username as the `data-user` attribute
+            }
+          });
+
+          // Set the updated content
+          editor.setContents(delta, 'silent');
+
+          // Re-enable editor
+          editor.enable();
+
+          // Restore cursor position
+          if (currentSelection) {
+            editor.setSelection(currentSelection);
+          }
+
           // Update version
           if (version) {
             lastContentVersion.current = version;
@@ -587,7 +693,7 @@ const Editor = () => {
 
             {/* Active Users Display */}
             <div className="flex items-center space-x-2 px-4">
-              {activeUsers.map(u => (
+              {activeUsers.map((u) => (
                 <div
                   key={u.userId}
                   className="flex items-center text-sm text-gray-600"
