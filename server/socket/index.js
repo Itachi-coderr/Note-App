@@ -5,8 +5,8 @@ const setupSocket = (server) => {
   const io = new Server(server, {
     cors: {
       origin: [
-        'http://localhost:5173',
-        'https://note-app-vx7i.vercel.app/' // Replace with your Vercel frontend domain
+        'http://localhost:5173', // Local development
+        'https://note-app-vx7i.vercel.app' // Deployed frontend on Vercel
       ],
       methods: ['GET', 'POST'],
       credentials: true

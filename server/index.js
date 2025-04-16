@@ -34,6 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// CORS for WebSocket
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
