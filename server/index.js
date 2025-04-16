@@ -17,9 +17,9 @@ const io = setupSocket(server);
 
 // CORS configuration
 const allowedOrigins = [
-  process.env.CORS_ORIGIN,
-  'http://localhost:5173',
-  'https://your-frontend-domain.vercel.app' // Replace with your Vercel frontend domain
+  process.env.CLIENT_URL, // Ensure this points to your deployed frontend
+  'http://localhost:5173', // Local development
+  'https://note-app-vx7i.vercel.app' // Deployed frontend on Vercel
 ];
 
 // Middleware
