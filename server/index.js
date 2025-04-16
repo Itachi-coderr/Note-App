@@ -19,7 +19,7 @@ const io = setupSocket(server);
 const allowedOrigins = [
   process.env.CORS_ORIGIN,
   'http://localhost:5173',
-  'https://note-app-kdmc.vercel.app/'
+  'https://your-frontend-domain.vercel.app' // Replace with your Vercel frontend domain
 ];
 
 // Middleware

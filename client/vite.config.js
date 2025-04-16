@@ -15,5 +15,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     host: true
+  },
+  define: {
+    'process.env': {} // Ensure compatibility with Vercel
   }
 })
