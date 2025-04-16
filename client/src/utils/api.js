@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL || 'https://your-backend-domain.vercel.app/api'}`, // Replace with your Vercel backend domain
+  baseURL: `${import.meta.env.VITE_API_URL || 'https://note-app-rosy-omega.vercel.app/api'}`, // Replace with your Vercel backend domain
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
