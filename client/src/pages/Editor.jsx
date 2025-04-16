@@ -206,7 +206,7 @@ const Editor = () => {
         setContent(response.data.content || '');
         lastContentVersion.current = response.data.version || 0;
 
-        // Get shared users
+        // Fetch shared users only if the document exists
         const sharedResponse = await api.get(`/notes/${id}/shared`);
         if (sharedResponse.data) {
           const sharedUsers = sharedResponse.data.map(user => ({
@@ -221,8 +221,13 @@ const Editor = () => {
       }
     } catch (error) {
       console.error('Error fetching note:', error);
-      if (error.response?.status === 404 && id) {
-        await handleSave();
+
+      // Handle 404 errors specifically
+      if (error.response?.status === 404) {
+        console.warn('Document not found, but suppressing popup.');
+        // Do not show the popup or redirect
+      } else {
+        alert('An error occurred while loading the document. Please try again.');
       }
     }
   };

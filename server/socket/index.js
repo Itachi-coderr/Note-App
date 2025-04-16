@@ -134,6 +134,7 @@ const setupSocket = (server) => {
       try {
         const document = await Note.findById(documentId);
         if (!document) {
+          console.warn(`Document not found: ${documentId}`);
           return socket.emit('document-error', { message: 'Document not found' });
         }
     

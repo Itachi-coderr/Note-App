@@ -32,6 +32,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/signin';
+    } else if (error.response?.status === 404) {
+      console.warn('Resource not found:', error.response.config.url);
     }
     return Promise.reject(error);
   }
@@ -65,4 +67,4 @@ export const upload = {
   }),
 };
 
-export default api; 
+export default api;
