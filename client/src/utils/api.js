@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL || 'https://note-app-rosy-omega.vercel.app'}`, // Replace with your Vercel backend domain
+  baseURL: `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
@@ -32,8 +32,6 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/signin';
-    } else if (error.response?.status === 404) {
-      console.warn('Resource not found:', error.response.config.url);
     }
     return Promise.reject(error);
   }
@@ -67,4 +65,4 @@ export const upload = {
   }),
 };
 
-export default api;
+export default api; 

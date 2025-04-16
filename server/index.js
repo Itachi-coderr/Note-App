@@ -17,9 +17,9 @@ const io = setupSocket(server);
 
 // CORS configuration
 const allowedOrigins = [
-  process.env.CLIENT_URL, // Ensure this points to your deployed frontend
-  'http://localhost:5173', // Local development
-  'https://note-app-vx7i.vercel.app' // Deployed frontend on Vercel
+  process.env.CORS_ORIGIN,
+  'http://localhost:5173',
+  'https://note-app-kdmc.vercel.app/'
 ];
 
 // Middleware
@@ -34,7 +34,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS for WebSocket
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {

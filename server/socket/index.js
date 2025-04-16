@@ -4,10 +4,7 @@ const Note = require('../models/Note');
 const setupSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: [
-        'http://localhost:5173', // Local development
-        'https://note-app-vx7i.vercel.app' // Deployed frontend on Vercel
-      ],
+      origin: 'http://localhost:5173',
       methods: ['GET', 'POST'],
       credentials: true
     }
@@ -137,7 +134,6 @@ const setupSocket = (server) => {
       try {
         const document = await Note.findById(documentId);
         if (!document) {
-          console.warn(`Document not found: ${documentId}`);
           return socket.emit('document-error', { message: 'Document not found' });
         }
     
